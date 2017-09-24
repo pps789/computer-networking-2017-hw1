@@ -167,6 +167,22 @@ void after_login(int client_fd, int who){
                     add_queue(i, query(SEND, buff, msgsize));
             }
         }
+        else if(type == LEAVE){
+            bool can_leave;
+            lck.lock();
+            can_leave = in_group[who];
+            lck.unlock();
+            if(!can_leave)
+                add_queue(who, query(CANNOT_LEAVE, nullptr, 0));
+            else{
+                lck.lock();
+                in_group[who] = false;
+                invited[who] = false;
+                lck.unlock();
+                add_queue(who, query(LEAVE, nullptr, 0));
+            }
+        }
+        else if(type == LOGOUT) break;
     }
     
     lck.lock();
