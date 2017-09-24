@@ -223,9 +223,11 @@ int main(){
     server_addr.sin_family = AF_INET;
     server_addr.sin_addr.s_addr = htonl(INADDR_ANY);
     server_addr.sin_port = htons(PORT);
-    bind(sock_fd_server, (struct sockaddr*) &server_addr,
-            sizeof(struct sockaddr_in));
-    listen(sock_fd_server, 5);
+    if(bind(sock_fd_server, (struct sockaddr*) &server_addr,
+            sizeof(struct sockaddr_in)) < 0)
+        exit(1);
+    if(listen(sock_fd_server, 5) < 0)
+        exit(1);
 
     client_addr_size = sizeof(struct sockaddr_in);
     std::thread(sender).detach();
