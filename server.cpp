@@ -3,6 +3,7 @@
 #include <sys/socket.h>
 #include <unistd.h>
 #include <errno.h>
+#include <time.h>
 #include <thread>
 #include <mutex>
 #include <condition_variable>
@@ -38,13 +39,15 @@ bool in_group[4] = {true, true, false, false};
 bool invited[4];
 
 void sender(){
+    timespec ts;
+    ts.tv_nsec = 10000;
     query q;
     int fd;
     char buff[MSGSIZE];
     while(1){
         for(int i=0;i<4;i++){
+            nanosleep(&ts, nullptr);
             bool to_send = false;
-
             std::unique_lock<std::mutex> lck(mtx);
             if(fds[i] > 0 && !client_queue[i].empty()){
                 fd = fds[i];
