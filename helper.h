@@ -16,6 +16,7 @@ enum message_type{
     DECLINE_INVITE,
     NOT_IN_GROUP,
     ALREADY_IN_GROUP,
+    INVALID_ID,
     CANNOT_SEND,
     LEAVE,
     CANNOT_LEAVE,

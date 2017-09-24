@@ -69,6 +69,9 @@ void receiver(int fd){
         else if(type == ALREADY_IN_GROUP){
             printf("Target is already in group.\n");
         }
+        else if(type == INVALID_ID){
+            printf("Please type valid id.\n");
+        }
         else if(type == CANNOT_SEND){
             printf("You are not a member of a group. You cannot send messages.\n");
         }
@@ -136,6 +139,7 @@ void after_login(int fd){
         }
     }
     close(fd);
+    exit(0);
 };
 
 int main(){

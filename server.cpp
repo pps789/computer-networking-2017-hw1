@@ -120,7 +120,12 @@ void after_login(int client_fd, int who){
     int msgsize;
     while((msgsize = read_message(client_fd, &type, buff)) >= 0){
         if(type == INVITE){
-            int invite = *(int*)buff;
+            if(msgsize != 1 || !('A' <= buff[0] && buff[0] <= 'D')){
+                add_queue(who, query(INVALID_ID, nullptr, 0));
+                continue;
+            }
+            
+            int invite = buff[0] - 'A';
             bool me, you;
             lck.lock();
             me = in_group[who];
