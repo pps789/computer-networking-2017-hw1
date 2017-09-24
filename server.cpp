@@ -2,6 +2,7 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <unistd.h>
+#include <errno.h>
 #include <thread>
 #include <cstdio>
 #include <cstring>
@@ -20,10 +21,7 @@ enum message_type{
 bool read_n(int fd, char *buff, int size){
     while(size){
         int rd = read(fd, buff, size);
-        if(rd < 0){
-            printf("rd: %d\n", rd);
-            return false;
-        }
+        if(rd < 0) return false;
         size -= rd;
         buff += rd;
     }
@@ -39,11 +37,9 @@ std::queue<query> client_queue[4];
 */
 
 void do_login(int client_fd){
-    printf("Somebody connected! Fd is %d\n", client_fd);
     char buff[MSGSIZE];
     int msgsize;
-    while(read_n(client_fd, (char*)msgsize, 4)){
-        printf("msessage size %d is comming!\n", msgsize);
+    while(read_n(client_fd, (char*)&msgsize, 4)){
         char type;
         if(!read_n(client_fd, &type, 1)) return;
         if(!read_n(client_fd, buff, msgsize)) return;
@@ -55,7 +51,6 @@ void do_login(int client_fd){
             }
         }
     }
-    printf("Byebye %d\n", client_fd);
 }
 
 void after_login(int client_fd, int who){

@@ -2,6 +2,7 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <unistd.h>
+#include <errno.h>
 #include <thread>
 #include <cstdio>
 #include <cstring>
@@ -52,14 +53,11 @@ void do_login(int fd){
     char buff[MSGSIZE];
     while(1){
         scanf("%s", buff);
-        printf("Send message... %s\n", buff);
         send_message(fd, LOGIN, buff, strlen(buff));
     }
 }
 
 void after_login(int client_fd, int who){
-    printf("Hello, user %d!\n", who);
-    close(client_fd);
 };
 
 int main(){
