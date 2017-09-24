@@ -25,14 +25,13 @@ void sender();
 int fds[4] = {-1,-1,-1,-1};
 
 struct query{
-    int who;
     char type;
     std::vector<char> message;
     query(){}
-    query(int _who, char _type, char* buff, int size):
-        who(_who), type(_type), message(buff, buff+size){}
-    query(int _who, int _type, char* buff, int size):
-        who(_who), type(_type), message(buff, buff+size){}
+    query(char _type, char* buff, int size):
+        type(_type), message(buff, buff+size){}
+    query(int _type, char* buff, int size):
+        type(_type), message(buff, buff+size){}
 };
 std::queue<query> client_queue[4];
 bool in_group[4];
@@ -128,16 +127,16 @@ void after_login(int client_fd, int who){
             you = in_group[invite];
             lck.unlock();
 
-            if(!me) add_queue(invite, query(invite, NOT_IN_GROUP, nullptr, 0));
+            if(!me) add_queue(invite, query(NOT_IN_GROUP, nullptr, 0));
             else if(you){
                 *(int*)buff = invite;
-                add_queue(invite, query(invite, ALREADY_IN_GROUP, buff, 4));
+                add_queue(invite, query(ALREADY_IN_GROUP, buff, 4));
             }
             else{
                 lck.lock();
                 invited[invite] = true;
                 lck.unlock();
-                add_queue(invite, query(invite, INVITE, nullptr, 0));
+                add_queue(invite, query(INVITE, nullptr, 0));
             }
         }
         else if(type == ACCEPT_INVITE){
@@ -155,6 +154,18 @@ void after_login(int client_fd, int who){
             lck.lock();
             invited[who] = false;
             lck.unlock();
+        }
+        else if(type == SEND){
+            bool cur_group[4];
+            lck.lock();
+            for(int i=0;i<4;i++) cur_group[i] = in_group[i];
+            lck.unlock();
+            if(!cur_group[who])
+                add_queue(who, query(CANNOT_SEND, nullptr, 0));
+            else{
+                for(int i=0;i<4;i++) if(i!=who && cur_group[i])
+                    add_queue(i, query(SEND, buff, msgsize));
+            }
         }
     }
     

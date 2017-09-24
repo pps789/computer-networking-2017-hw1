@@ -15,7 +15,8 @@ enum message_type{
     ACCEPT_INVITE,
     DECLINE_INVITE,
     NOT_IN_GROUP,
-    ALREADY_IN_GROUP
+    ALREADY_IN_GROUP,
+    CANNOT_SEND
 };
 
 #endif
