@@ -28,8 +28,15 @@ struct query{
     int who;
     char type;
     std::vector<char> message;
+    query(){}
+    query(int _who, char _type, char* buff, int size):
+        who(_who), type(_type), message(buff, buff+size){}
+    query(int _who, int _type, char* buff, int size):
+        who(_who), type(_type), message(buff, buff+size){}
 };
 std::queue<query> client_queue[4];
+bool in_group[4];
+bool invited[4];
 
 void sender(){
     query q;
@@ -93,6 +100,12 @@ void do_login(int client_fd){
     printf("%d connection closed.\n", client_fd);
 }
 
+void add_queue(int target, const query& q){
+    std::unique_lock<std::mutex> lck(mtx);
+    client_queue[target].push(q);
+    lck.unlock();
+}
+
 void after_login(int client_fd, int who){
     printf("User %d login. Client_fd: %d\n", who, client_fd);
 
@@ -107,6 +120,42 @@ void after_login(int client_fd, int who){
     char buff[MSGSIZE];
     int msgsize;
     while((msgsize = read_message(client_fd, &type, buff)) >= 0){
+        if(type == INVITE){
+            int invite = *(int*)buff;
+            bool me, you;
+            lck.lock();
+            me = in_group[who];
+            you = in_group[invite];
+            lck.unlock();
+
+            if(!me) add_queue(invite, query(invite, NOT_IN_GROUP, nullptr, 0));
+            else if(you){
+                *(int*)buff = invite;
+                add_queue(invite, query(invite, ALREADY_IN_GROUP, buff, 4));
+            }
+            else{
+                lck.lock();
+                invited[invite] = true;
+                lck.unlock();
+                add_queue(invite, query(invite, INVITE, nullptr, 0));
+            }
+        }
+        else if(type == ACCEPT_INVITE){
+            bool can_join;
+            lck.lock();
+            can_join = invited[who];
+            lck.unlock();
+            if(can_join){
+                lck.lock();
+                in_group[who] = true;
+                lck.unlock();
+            }
+        }
+        else if(type == DECLINE_INVITE){
+            lck.lock();
+            invited[who] = false;
+            lck.unlock();
+        }
     }
     
     lck.lock();

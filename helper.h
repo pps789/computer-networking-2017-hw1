@@ -8,7 +8,14 @@ int read_message(int fd, char* type, char* buff);
 bool send_int(int fd, int type, int payload);
 
 enum message_type{
-    LOGIN = 1, LOGIN_STATUS, INVITE, SEND, ACCEPT_INVITE, DECLINE_INVITE
+    LOGIN = 1,
+    LOGIN_STATUS,
+    INVITE,
+    SEND,
+    ACCEPT_INVITE,
+    DECLINE_INVITE,
+    NOT_IN_GROUP,
+    ALREADY_IN_GROUP
 };
 
 #endif
