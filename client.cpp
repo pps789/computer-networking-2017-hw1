@@ -8,19 +8,22 @@
 #include <cstring>
 #include <cstdlib>
 #include <queue>
+#include <string>
 #include "helper.h"
 
 const int PORT = 20400;
 const int MSGSIZE = 256;
 
 void do_login(int fd);
-void after_login(int fd, int who);
+void after_login(int fd);
 
 void do_login(int fd){
     char buff[MSGSIZE];
     while(1){
         fgets(buff, sizeof(buff), stdin);
-        send_message(fd, LOGIN, buff, strlen(buff) - 1);
+        int len = strlen(buff);
+        if(buff[len-1] == '\n') len--;
+        send_message(fd, LOGIN, buff, len);
         while(1){
             char type;
             int msgsize = read_message(fd, &type, buff);
@@ -33,7 +36,7 @@ void do_login(int fd){
             }
             else{
                 printf("Login succeeded! You have unread messages: %d\n", status);
-                after_login(fd, buff[0] - 'A');
+                after_login(fd);
             }
         }
     }
@@ -79,8 +82,60 @@ void receiver(int fd){
     }
 }
 
-void after_login(int fd, int who){
+void after_login(int fd){
+    std::thread(receiver, fd).detach();
+    char buff[MSGSIZE];
+    int msgsize;
+    while(1){
+        fgets(buff, sizeof(buff), stdin);
+        msgsize = strlen(buff) - 1;
+        if(buff[msgsize-1] == '\n') msgsize--;
+        if(buff[0] != '/'){
+            send_message(fd, SEND, buff, msgsize);
+        }
+        else{
+            std::vector<char> tk;
+            int i = 1;
+            for(;i<msgsize;i++){
+                if(isspace(buff[i])) break;
+                tk.push_back(buff[i]);
+            }
 
+            std::string token(tk.begin(), tk.end());
+            if(token == "accept"){
+                send_message(fd, ACCEPT_INVITE, nullptr, 0);
+            }
+            else if(token == "decline"){
+                send_message(fd, DECLINE_INVITE, nullptr, 0);
+            }
+            else if(token == "leave"){
+                send_message(fd, LEAVE, nullptr, 0);
+            }
+            else if(token == "logout"){
+                send_message(fd, LOGOUT, nullptr, 0);
+                break;
+            }
+            else if(token == "invite"){
+                for(;i<msgsize;i++) if(!isspace(buff[i])) break;
+                if(i >= msgsize){
+                    printf("Please type target ID.\n");
+                }
+                else{
+                    std::vector<char> tg;
+                    for(;i<msgsize;i++){
+                        if(isspace(buff[i])) break;
+                        tg.push_back(buff[i]);
+                    }
+                    std::copy(tg.begin(), tg.end(), buff);
+                    send_message(fd, INVITE, buff, tg.size());
+                }
+            }
+            else{
+                printf("Unknown command.\n");
+            }
+        }
+    }
+    close(fd);
 };
 
 int main(){

@@ -34,7 +34,7 @@ struct query{
         type(_type), message(buff, buff+size){}
 };
 std::queue<query> client_queue[4];
-bool in_group[4];
+bool in_group[4] = {true, true, false, false};
 bool invited[4];
 
 void sender(){
@@ -219,6 +219,7 @@ int main(){
     listen(sock_fd_server, 5);
 
     client_addr_size = sizeof(struct sockaddr_in);
+    std::thread(sender).detach();
 
     while(1){
         sock_fd_client = accept(sock_fd_server,
