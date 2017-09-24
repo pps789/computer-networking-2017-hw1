@@ -11,6 +11,7 @@
 #include <cstdlib>
 #include <queue>
 #include <vector>
+#include <algorithm>
 #include "helper.h"
 
 const int PORT = 20400;
@@ -19,6 +20,7 @@ std::mutex mtx;
 
 void do_login(int client_fd);
 void after_login(int client_fd, int who);
+void sender();
 
 int fds[4] = {-1,-1,-1,-1};
 
@@ -29,6 +31,36 @@ struct query{
 };
 std::queue<query> client_queue[4];
 
+void sender(){
+    query q;
+    int fd;
+    char buff[MSGSIZE];
+    while(1){
+        for(int i=0;i<4;i++){
+            bool to_send = false;
+
+            std::unique_lock<std::mutex> lck(mtx);
+            if(fds[i] > 0 && !client_queue[i].empty()){
+                fd = fds[i];
+                q = client_queue[i].front();
+                to_send = true;
+            }
+            lck.unlock();
+
+            if(to_send){
+                to_send = false;
+                std::copy(q.message.begin(), q.message.end(), buff);
+                bool success = send_message(fd, q.type, buff, q.message.size());
+                if(success){
+                    lck.lock();
+                    client_queue[i].pop();
+                    lck.unlock();
+                }
+            }
+        }
+    }
+}
+
 void do_login(int client_fd){
     char buff[MSGSIZE];
     int msgsize;
@@ -38,15 +70,13 @@ void do_login(int client_fd){
             char id = buff[0];
             if('A' <= id && id <= 'D'){
                 int who = id - 'A';
+                int unread;
 
                 std::unique_lock<std::mutex> lck(mtx);
-                if(fds[who] > 0){
-                    close(fds[who]);
-                }
-                fds[who] = client_fd;
+                unread = client_queue[who].size();
                 lck.unlock();
 
-                send_int(client_fd, LOGIN_STATUS, 0); // TODO: send #(unread messages)
+                send_int(client_fd, LOGIN_STATUS, unread); // TODO: send #(unread messages)
                 after_login(client_fd, who);
             }
             else{
@@ -65,13 +95,21 @@ void do_login(int client_fd){
 
 void after_login(int client_fd, int who){
     printf("User %d login. Client_fd: %d\n", who, client_fd);
+
+    std::unique_lock<std::mutex> lck(mtx);
+    if(fds[who] > 0){
+        close(fds[who]);
+    }
+    fds[who] = client_fd;
+    lck.unlock();
+
     char type;
     char buff[MSGSIZE];
     int msgsize;
     while((msgsize = read_message(client_fd, &type, buff)) >= 0){
     }
     
-    std::unique_lock<std::mutex> lck(mtx);
+    lck.lock();
     close(fds[who]);
     fds[who] = -1;
     lck.unlock();
