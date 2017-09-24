@@ -3,8 +3,8 @@ CC = g++
 
 all: bin/server bin/client
 
-bin/%: %.o
-	$(CC) $(CXXFLAGS) -o $@ $<
+bin/%: %.o helper.o
+	$(CC) $(CXXFLAGS) -o $@ $< helper.o
 
 %.o: %.cpp
 	$(CC) $(CXXFLAGS) -c $< -o $@
