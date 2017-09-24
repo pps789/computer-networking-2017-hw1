@@ -20,7 +20,10 @@ enum message_type{
 bool read_n(int fd, char *buff, int size){
     while(size){
         int rd = read(fd, buff, size);
-        if(rd < 0) return false;
+        if(rd < 0){
+            printf("rd: %d\n", rd);
+            return false;
+        }
         size -= rd;
         buff += rd;
     }
@@ -36,12 +39,13 @@ std::queue<query> client_queue[4];
 */
 
 void do_login(int client_fd){
+    printf("Somebody connected! Fd is %d\n", client_fd);
     char buff[MSGSIZE];
     int msgsize;
     while(read_n(client_fd, (char*)msgsize, 4)){
+        printf("msessage size %d is comming!\n", msgsize);
         char type;
         if(!read_n(client_fd, &type, 1)) return;
-        msgsize--;
         if(!read_n(client_fd, buff, msgsize)) return;
 
         if(type==1 && msgsize==1){
@@ -51,6 +55,7 @@ void do_login(int client_fd){
             }
         }
     }
+    printf("Byebye %d\n", client_fd);
 }
 
 void after_login(int client_fd, int who){

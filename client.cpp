@@ -28,6 +28,7 @@ bool read_n(int fd, char *buff, int size){
 }
 
 bool write_n(int fd, char *buff, int size){
+    printf("WRITE %d CALL!!\n", size);
     while(size){
         int wr = write(fd, buff, size);
         if(wr < 0) return false;
@@ -37,12 +38,22 @@ bool write_n(int fd, char *buff, int size){
     return true;
 }
 
+bool send_message(int fd, int type, char *payload, int size){
+    char buff[MSGSIZE];
+    (*(int*)buff) = size;
+    buff[4] = type;
+    memcpy(buff+5, payload, size);
+
+    int msgsize = size;
+    return write_n(fd, buff, msgsize + 5);
+}
+
 void do_login(int fd){
     char buff[MSGSIZE];
     while(1){
-        scanf("%s", buff+1);
-        buff[0] = LOGIN;
-        write_n(fd, buff, strlen(buff));
+        scanf("%s", buff);
+        printf("Send message... %s\n", buff);
+        send_message(fd, LOGIN, buff, strlen(buff));
     }
 }
 
@@ -62,7 +73,7 @@ int main(){
 	server_addr.sin_port = htons(PORT);
 
 	if(connect(sock_fd, (struct sockaddr*) &server_addr,
-		sizeof(server_addr)) > 0){
+		sizeof(server_addr)) == 0){
         do_login(sock_fd);
     }
     else{
