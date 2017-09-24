@@ -4,23 +4,30 @@
 #include <unistd.h>
 #include <errno.h>
 #include <thread>
+#include <mutex>
+#include <condition_variable>
 #include <cstdio>
 #include <cstring>
 #include <cstdlib>
 #include <queue>
+#include <vector>
 #include "helper.h"
 
 const int PORT = 20400;
 const int MSGSIZE = 256;
-char ids[][2] = {"A", "B", "C", "D"};
-bool is_login[4];
+std::mutex mtx;
 
+void do_login(int client_fd);
 void after_login(int client_fd, int who);
 
-/*
-struct query;
+int fds[4] = {-1,-1,-1,-1};
+
+struct query{
+    int who;
+    char type;
+    std::vector<char> message;
+};
 std::queue<query> client_queue[4];
-*/
 
 void do_login(int client_fd){
     char buff[MSGSIZE];
@@ -30,8 +37,17 @@ void do_login(int client_fd){
         if(type==LOGIN && msgsize==1){
             char id = buff[0];
             if('A' <= id && id <= 'D'){
+                int who = id - 'A';
+
+                std::unique_lock<std::mutex> lck(mtx);
+                if(fds[who] > 0){
+                    close(fds[who]);
+                }
+                fds[who] = client_fd;
+                lck.unlock();
+
                 send_int(client_fd, LOGIN_STATUS, 0); // TODO: send #(unread messages)
-                after_login(client_fd, id - 'A');
+                after_login(client_fd, who);
             }
             else{
                 printf("Login Failed.\n");
@@ -43,11 +59,24 @@ void do_login(int client_fd){
             send_int(client_fd, LOGIN_STATUS, -1); // LOGIN fail
         }
     }
+
+    printf("%d connection closed.\n", client_fd);
 }
 
 void after_login(int client_fd, int who){
     printf("User %d login. Client_fd: %d\n", who, client_fd);
-    while(1);
+    char type;
+    char buff[MSGSIZE];
+    int msgsize;
+    while((msgsize = read_message(client_fd, &type, buff)) >= 0){
+    }
+    
+    std::unique_lock<std::mutex> lck(mtx);
+    close(fds[who]);
+    fds[who] = -1;
+    lck.unlock();
+
+    printf("User %d, fd %d connection closing.\n", who, client_fd);
 };
 
 int main(){
