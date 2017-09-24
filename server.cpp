@@ -40,7 +40,7 @@ bool invited[4];
 
 void sender(){
     timespec ts;
-    ts.tv_sec == 0;
+    ts.tv_sec = 0;
     ts.tv_nsec = 10000;
     query q;
     int fd;
