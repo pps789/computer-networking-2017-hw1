@@ -11,11 +11,9 @@
 
 const int PORT = 20400;
 const int MSGSIZE = 256;
-char ids[][2] = {"A", "B", "C", "D"};
-bool is_login[4];
 
 enum message_type{
-    LOGIN = 1, INVITE, SEND, ACCEPT_INVITE, DECLINE_INVITE
+    LOGIN = 1, LOGIN_STATUS, INVITE, SEND, ACCEPT_INVITE, DECLINE_INVITE
 };
 
 bool read_n(int fd, char *buff, int size){
@@ -29,7 +27,6 @@ bool read_n(int fd, char *buff, int size){
 }
 
 bool write_n(int fd, char *buff, int size){
-    printf("WRITE %d CALL!!\n", size);
     while(size){
         int wr = write(fd, buff, size);
         if(wr < 0) return false;
@@ -49,15 +46,40 @@ bool send_message(int fd, int type, char *payload, int size){
     return write_n(fd, buff, msgsize + 5);
 }
 
+bool read_message(int fd, char* type, char* buff){
+    int msgsize;
+    if(!read_n(fd, (char*)&msgsize, 4)) return false;
+    if(!read_n(fd, type, 1)) return false;
+    if(!read_n(fd, buff, msgsize)) return false;
+    return true;
+}
+
+void do_login(int fd);
+void after_login(int fd);
+
 void do_login(int fd){
     char buff[MSGSIZE];
     while(1){
-        scanf("%s", buff);
-        send_message(fd, LOGIN, buff, strlen(buff));
+        fgets(buff, sizeof(buff), stdin);
+        send_message(fd, LOGIN, buff, strlen(buff) - 1);
+        while(1){
+            char type;
+            read_message(fd, &type, buff);
+            if(type != LOGIN_STATUS) continue;
+            int status = *(int*)(buff);
+            if(status == -1){
+                printf("Login failed. Please check your id and type again.\n");
+                break;
+            }
+            else{
+                printf("Login succeeded! You have unread messages: %d\n", status);
+                after_login(fd);
+            }
+        }
     }
 }
 
-void after_login(int client_fd, int who){
+void after_login(int fd){
 };
 
 int main(){

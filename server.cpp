@@ -15,7 +15,7 @@ char ids[][2] = {"A", "B", "C", "D"};
 bool is_login[4];
 
 enum message_type{
-    LOGIN = 1, INVITE, SEND, ACCEPT_INVITE, DECLINE_INVITE
+    LOGIN = 1, LOGIN_STATUS, INVITE, SEND, ACCEPT_INVITE, DECLINE_INVITE
 };
 
 bool read_n(int fd, char *buff, int size){
@@ -26,6 +26,43 @@ bool read_n(int fd, char *buff, int size){
         buff += rd;
     }
     return true;
+}
+
+bool write_n(int fd, char *buff, int size){
+    while(size){
+        int wr = write(fd, buff, size);
+        if(wr < 0) return false;
+        size -= wr;
+        buff += wr;
+    }
+    return true;
+}
+
+bool send_message(int fd, int type, char *payload, int size){
+    char buff[MSGSIZE];
+    (*(int*)buff) = size;
+    buff[4] = type;
+    memcpy(buff+5, payload, size);
+
+    int msgsize = size;
+    return write_n(fd, buff, msgsize + 5);
+}
+
+bool send_int(int fd, int type, int payload){
+    char buff[9];
+    (*(int*)buff) = 4;
+    buff[4] = type;
+    (*(int*)(buff+5)) = payload;
+
+    return write_n(fd, buff, 9);
+}
+
+int read_message(int fd, char* type, char* buff){
+    int msgsize;
+    if(!read_n(fd, (char*)&msgsize, 4)) return -1;
+    if(!read_n(fd, type, 1)) return -1;
+    if(!read_n(fd, buff, msgsize)) return -1;
+    return msgsize;
 }
 
 void do_login(int client_fd);
@@ -39,23 +76,26 @@ std::queue<query> client_queue[4];
 void do_login(int client_fd){
     char buff[MSGSIZE];
     int msgsize;
-    while(read_n(client_fd, (char*)&msgsize, 4)){
-        char type;
-        if(!read_n(client_fd, &type, 1)) return;
-        if(!read_n(client_fd, buff, msgsize)) return;
-
-        if(type==1 && msgsize==1){
+    char type;
+    while((msgsize = read_message(client_fd, &type, buff)) >= 0){
+        if(type==LOGIN && msgsize==1){
             char id = buff[0];
             if('A' <= id && id <= 'D'){
+                send_int(client_fd, LOGIN_STATUS, 0); // TODO: send #(unread messages)
                 after_login(client_fd, id - 'A');
             }
+            else send_int(client_fd, LOGIN_STATUS, -1); // LOGIN fail
+        }
+        else{
+            printf("Login Failed.\n");
+            send_int(client_fd, LOGIN_STATUS, -1); // LOGIN fail
         }
     }
 }
 
 void after_login(int client_fd, int who){
-    printf("Hello, user %d!\n", who);
-    close(client_fd);
+    printf("User %d login. Client_fd: %d\n", who, client_fd);
+    while(1);
 };
 
 int main(){
