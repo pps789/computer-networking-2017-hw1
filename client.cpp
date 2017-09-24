@@ -14,7 +14,7 @@ const int PORT = 20400;
 const int MSGSIZE = 256;
 
 void do_login(int fd);
-void after_login(int fd);
+void after_login(int fd, int who);
 
 void do_login(int fd){
     char buff[MSGSIZE];
@@ -33,13 +33,54 @@ void do_login(int fd){
             }
             else{
                 printf("Login succeeded! You have unread messages: %d\n", status);
-                after_login(fd);
+                after_login(fd, buff[0] - 'A');
             }
         }
     }
 }
 
-void after_login(int fd){
+void receiver(int fd){
+    char buff[MSGSIZE];
+    char type;
+    int msgsize;
+    while((msgsize = read_message(fd, &type, buff)) >= 0){
+        if(type == INVITE){
+            int who = *(int*)buff;
+            printf("%c invites you. /accept or /decline.\n", 'A' + who);
+        }
+        else if(type == SEND){
+            int who = *(int*)buff;
+            printf("%c: ", 'A' + who);
+            for(int i=4;i<msgsize;i++) printf("%c", buff[i]);
+            printf("\n");
+        }
+        else if(type == ACCEPT_INVITE){
+            printf("You accepted invitation. Now you can read messages.\n");
+        }
+        else if(type == DECLINE_INVITE){
+            printf("You declined invitation.\n");
+        }
+        else if(type == NOT_IN_GROUP){
+            printf("You are not a member of a group. You cannot invite someone.\n");
+        }
+        else if(type == ALREADY_IN_GROUP){
+            printf("Target is already in group.\n");
+        }
+        else if(type == CANNOT_SEND){
+            printf("You are not a member of a group. You cannot send messages.\n");
+        }
+        else if(type == LEAVE){
+            printf("You left the group.\n");
+        }
+        else if(type == CANNOT_LEAVE){
+            printf("You are not a member of a group. You cannot leave the group.\n");
+        }
+        else break;
+    }
+}
+
+void after_login(int fd, int who){
+
 };
 
 int main(){

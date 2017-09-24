@@ -149,11 +149,13 @@ void after_login(int client_fd, int who){
                 in_group[who] = true;
                 lck.unlock();
             }
+            add_queue(who, query(ACCEPT_INVITE, nullptr, 0));
         }
         else if(type == DECLINE_INVITE){
             lck.lock();
             invited[who] = false;
             lck.unlock();
+            add_queue(who, query(DECLINE_INVITE, nullptr, 0));
         }
         else if(type == SEND){
             bool cur_group[4];
@@ -163,8 +165,13 @@ void after_login(int client_fd, int who){
             if(!cur_group[who])
                 add_queue(who, query(CANNOT_SEND, nullptr, 0));
             else{
-                for(int i=0;i<4;i++) if(i!=who && cur_group[i])
+                for(int i=0;i<4;i++) if(i!=who && cur_group[i]){
+                    msgsize += 4;
+                    for(int j=msgsize-1;j>=4;j--)
+                        buff[j] = buff[j-4];
+                    *(int*)buff = who;
                     add_queue(i, query(SEND, buff, msgsize));
+                }
             }
         }
         else if(type == LEAVE){
