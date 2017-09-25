@@ -133,10 +133,10 @@ void after_login(int client_fd, int who){
             you = in_group[invite];
             lck.unlock();
 
-            if(!me) add_queue(invite, query(NOT_IN_GROUP, nullptr, 0));
+            if(!me) add_queue(who, query(NOT_IN_GROUP, nullptr, 0));
             else if(you){
                 *(int*)buff = invite;
-                add_queue(invite, query(ALREADY_IN_GROUP, buff, 4));
+                add_queue(who, query(ALREADY_IN_GROUP, buff, 4));
             }
             else{
                 lck.lock();
