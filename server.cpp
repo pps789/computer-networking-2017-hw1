@@ -142,7 +142,8 @@ void after_login(int client_fd, int who){
                 lck.lock();
                 invited[invite] = true;
                 lck.unlock();
-                add_queue(invite, query(INVITE, nullptr, 0));
+                *(int*)buff = invite;
+                add_queue(invite, query(INVITE, buff, 4));
             }
         }
         else if(type == ACCEPT_INVITE){
