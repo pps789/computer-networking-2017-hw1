@@ -86,7 +86,7 @@ void do_login(int client_fd){
                 unread = client_queue[who].size();
                 lck.unlock();
 
-                send_int(client_fd, LOGIN_STATUS, unread); // TODO: send #(unread messages)
+                send_int(client_fd, LOGIN_STATUS, unread);
                 after_login(client_fd, who);
             }
             else{
@@ -113,9 +113,6 @@ void after_login(int client_fd, int who){
     printf("User %d login. Client_fd: %d\n", who, client_fd);
 
     std::unique_lock<std::mutex> lck(mtx);
-    if(fds[who] > 0){
-        close(fds[who]);
-    }
     fds[who] = client_fd;
     lck.unlock();
 
