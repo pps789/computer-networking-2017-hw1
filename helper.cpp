@@ -7,7 +7,7 @@ const int MSGSIZE = 256;
 bool read_n(int fd, char *buff, int size){
     while(size){
         int rd = read(fd, buff, size);
-        if(rd < 0) return false;
+        if(rd <= 0) return false;
         size -= rd;
         buff += rd;
     }
@@ -17,7 +17,7 @@ bool read_n(int fd, char *buff, int size){
 bool write_n(int fd, char *buff, int size){
     while(size){
         int wr = write(fd, buff, size);
-        if(wr < 0) return false;
+        if(wr <= 0) return false;
         size -= wr;
         buff += wr;
     }
