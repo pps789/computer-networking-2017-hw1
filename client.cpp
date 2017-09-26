@@ -17,16 +17,25 @@ const int MSGSIZE = 256;
 void do_login(int fd);
 void after_login(int fd);
 
+void connection_failed(){
+    printf("Connection failed.\n");
+    exit(0);
+}
+
 void do_login(int fd){
+    printf("Connected! Please type your ID.\n");
     char buff[MSGSIZE];
     while(1){
         fgets(buff, sizeof(buff), stdin);
         int len = strlen(buff);
         if(buff[len-1] == '\n') len--;
-        send_message(fd, LOGIN, buff, len);
+        if(!send_message(fd, LOGIN, buff, len))
+            connection_failed();
         while(1){
             char type;
             int msgsize = read_message(fd, &type, buff);
+            if(msgsize < 0)
+                connection_failed();
             if(type != LOGIN_STATUS) continue;
             if(msgsize != 4) continue;
             int status = *(int*)(buff);
@@ -81,8 +90,9 @@ void receiver(int fd){
         else if(type == CANNOT_LEAVE){
             printf("You are not a member of a group. You cannot leave the group.\n");
         }
-        else break;
+        else continue;
     }
+    connection_failed();
 }
 
 void after_login(int fd){
@@ -94,7 +104,8 @@ void after_login(int fd){
         msgsize = strlen(buff) - 1;
         if(buff[msgsize-1] == '\n') msgsize--;
         if(buff[0] != '/'){
-            send_message(fd, SEND, buff, msgsize);
+            if(!send_message(fd, SEND, buff, msgsize))
+                connection_failed();
         }
         else{
             std::vector<char> tk;
@@ -106,16 +117,20 @@ void after_login(int fd){
 
             std::string token(tk.begin(), tk.end());
             if(token == "accept"){
-                send_message(fd, ACCEPT_INVITE, nullptr, 0);
+                if(!send_message(fd, ACCEPT_INVITE, nullptr, 0))
+                    connection_failed();
             }
             else if(token == "decline"){
-                send_message(fd, DECLINE_INVITE, nullptr, 0);
+                if(!send_message(fd, DECLINE_INVITE, nullptr, 0))
+                    connection_failed();
             }
             else if(token == "leave"){
-                send_message(fd, LEAVE, nullptr, 0);
+                if(send_message(fd, LEAVE, nullptr, 0))
+                    connection_failed();
             }
             else if(token == "logout"){
-                send_message(fd, LOGOUT, nullptr, 0);
+                if(send_message(fd, LOGOUT, nullptr, 0))
+                    connection_failed();
                 break;
             }
             else if(token == "invite"){
@@ -130,7 +145,8 @@ void after_login(int fd){
                         tg.push_back(buff[i]);
                     }
                     std::copy(tg.begin(), tg.end(), buff);
-                    send_message(fd, INVITE, buff, tg.size());
+                    if(send_message(fd, INVITE, buff, tg.size()))
+                        connection_failed();
                 }
             }
             else{
