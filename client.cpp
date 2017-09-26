@@ -26,12 +26,14 @@ void do_login(int fd){
     printf("Connected! Please type your ID.\n");
     char buff[MSGSIZE];
     while(1){
+        // login phase
         fgets(buff, sizeof(buff), stdin);
         int len = strlen(buff);
-        if(buff[len-1] == '\n') len--;
-        if(!send_message(fd, LOGIN, buff, len))
+        if(buff[len-1] == '\n') len--; // remove newline
+        if(!send_message(fd, LOGIN, buff, len)) // login query
             connection_failed();
         while(1){
+            // wait for LOGIN_STATUS message
             char type;
             int msgsize = read_message(fd, &type, buff);
             if(msgsize < 0)
@@ -40,10 +42,12 @@ void do_login(int fd){
             if(msgsize != 4) continue;
             int status = *(int*)(buff);
             if(status == -1){
+                // invalid ID
                 printf("Login failed. Please check your id and type again.\n");
                 break;
             }
             else{
+                // login succeeded!
                 printf("Login succeeded! You have unread messages: %d\n", status);
                 after_login(fd);
             }
@@ -56,6 +60,7 @@ void receiver(int fd){
     char type;
     int msgsize;
     while((msgsize = read_message(fd, &type, buff)) >= 0){
+        // message is comming. just parse and print.
         if(type == INVITE){
             int who = *(int*)buff;
             printf("%c invites you. /accept or /decline.\n", 'A' + who);
@@ -102,6 +107,7 @@ void receiver(int fd){
 }
 
 void after_login(int fd){
+    // now, start receiver thread. In this function, we will only send messages.
     std::thread(receiver, fd).detach();
     char buff[MSGSIZE];
     int msgsize;
@@ -110,18 +116,23 @@ void after_login(int fd){
         msgsize = strlen(buff) - 1;
         if(buff[msgsize-1] == '\n') msgsize--;
         if(buff[0] != '/'){
+            // chatting.
             if(!send_message(fd, SEND, buff, msgsize))
                 connection_failed();
         }
         else{
+            // command.
             std::vector<char> tk;
             int i = 1;
+
+            // parse first word
             for(;i<msgsize;i++){
                 if(isspace(buff[i])) break;
                 tk.push_back(buff[i]);
             }
 
             std::string token(tk.begin(), tk.end());
+            // simple commands: accept, decline, leave, logout
             if(token == "accept"){
                 if(!send_message(fd, ACCEPT_INVITE, nullptr, 0))
                     connection_failed();
@@ -140,8 +151,10 @@ void after_login(int fd){
                 break;
             }
             else if(token == "invite"){
+                // invite command needs one argument
                 for(;i<msgsize;i++) if(!isspace(buff[i])) break;
                 if(i >= msgsize){
+                    // zero argument case
                     printf("Please type target ID.\n");
                 }
                 else{
@@ -151,6 +164,7 @@ void after_login(int fd){
                         tg.push_back(buff[i]);
                     }
                     std::copy(tg.begin(), tg.end(), buff);
+                    // just send invite message
                     if(!send_message(fd, INVITE, buff, tg.size()))
                         connection_failed();
                 }
@@ -174,6 +188,7 @@ int main(){
 	server_addr.sin_addr.s_addr = inet_addr("127.0.0.1");
 	server_addr.sin_port = htons(PORT);
 
+    // connect to server
 	if(connect(sock_fd, (struct sockaddr*) &server_addr,
 		sizeof(server_addr)) == 0){
         do_login(sock_fd);

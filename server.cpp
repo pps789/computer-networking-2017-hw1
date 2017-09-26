@@ -27,6 +27,7 @@ void sender();
 int fds[4] = {-1,-1,-1,-1};
 
 struct query{
+    // just pair of (type, message)
     char type;
     std::vector<char> message;
     query(){}
@@ -35,9 +36,9 @@ struct query{
     query(int _type, char* buff, int size):
         type(_type), message(buff, buff+size){}
 };
-std::queue<query> client_queue[4];
-bool in_group[4] = {true, true, false, false};
-bool invited[4];
+std::queue<query> client_queue[4]; // unsended messages
+bool in_group[4] = {true, true, false, false}; // user i is in group?
+bool invited[4]; // user i has been invited?
 
 void sender(){
     query q;
@@ -47,6 +48,7 @@ void sender(){
         bool to_send = false;
         int target = -1;
         for(int i=0;i<4;i++){
+            // find unsended && can send query
             std::unique_lock<std::mutex> lck(mtx);
             if(fds[i] > 0 && !client_queue[i].empty()){
                 fd = fds[i];
@@ -59,14 +61,17 @@ void sender(){
         }
 
         if(to_send){
+            // found!
             std::copy(q.message.begin(), q.message.end(), buff);
             if(send_message(fd, q.type, buff, q.message.size())){
+                // if success, pop from queue.
                 std::unique_lock<std::mutex> lck(mtx);
                 client_queue[target].pop();
                 lck.unlock();
             }
         }
         else{
+            // not found! sleep.
             std::unique_lock<std::mutex> lck(mtx);
             cv.wait(lck);
             lck.unlock();
@@ -80,13 +85,16 @@ void do_login(int client_fd){
     char type;
     while((msgsize = read_message(client_fd, &type, buff)) >= 0){
         if(type==LOGIN && msgsize==1){
+            // msgsize==1: just for checking ID.
             char id = buff[0];
             if('A' <= id && id <= 'D'){
+                // valid ID
                 int who = id - 'A';
                 after_login(client_fd, who);
 
+                // reach here means 'connection closed'
                 std::unique_lock<std::mutex> lck(mtx);
-                if(fds[who] == client_fd)
+                if(fds[who] == client_fd) // duplicated login handling.
                     fds[who] = -1;
                 lck.unlock();
                 break;
@@ -107,9 +115,10 @@ void do_login(int client_fd){
 }
 
 void add_queue(int target, const query& q){
+    // if we add messages to queue, wake the sender thread up.
     std::unique_lock<std::mutex> lck(mtx);
     client_queue[target].push(q);
-    cv.notify_one();
+    cv.notify_one(); // wake up!
     lck.unlock();
 }
 
@@ -117,16 +126,20 @@ void after_login(int client_fd, int who){
     fprintf(stderr, "User %d login. Client_fd: %d\n", who, client_fd);
     int unread;
 
+    // now we update fds[who], so sender thread can send messages to 'who'.
+    // before send messages, we should count unread messages.
     std::unique_lock<std::mutex> lck(mtx);
     unread = client_queue[who].size();
     if(fds[who] != -1) close(fds[who]);
     fds[who] = client_fd;
     lck.unlock();
 
+    // login succeeded!
     if(!send_int(client_fd, LOGIN_STATUS, unread)) return;
 
+    // from now, all messages is sended async.
     lck.lock();
-    cv.notify_one();
+    cv.notify_one(); // wake up!
     lck.unlock();
 
     char type;
@@ -134,7 +147,8 @@ void after_login(int client_fd, int who){
     int msgsize;
     while((msgsize = read_message(client_fd, &type, buff)) >= 0){
         if(type == INVITE){
-            if(msgsize != 1 || !('A' <= buff[0] && buff[0] <= 'D')){
+            // invite.
+            if(msgsize != 1 || !('A' <= buff[0] && buff[0] <= 'D')){ // id check.
                 add_queue(who, query(INVALID_ID, nullptr, 0));
                 continue;
             }
@@ -147,6 +161,7 @@ void after_login(int client_fd, int who){
             you = in_group[invite];
             lck.unlock();
 
+            // 'me' should be true, 'you' should be false.
             if(!me) add_queue(who, query(NOT_IN_GROUP, nullptr, 0));
             else if(you){
                 *(int*)buff = invite;
@@ -158,6 +173,8 @@ void after_login(int client_fd, int who){
                 lck.unlock();
 
                 *(int*)buff = who;
+
+                // send invite message and response of invite query.
                 add_queue(invite, query(INVITE, buff, 4));
                 add_queue(who, query(INVITE_SUCCESS, nullptr, 0));
             }
@@ -165,10 +182,11 @@ void after_login(int client_fd, int who){
         else if(type == ACCEPT_INVITE){
             bool can_join;
             lck.lock();
-            can_join = invited[who];
+            can_join = invited[who]; // has been invited?
             lck.unlock();
 
             if(can_join){
+                // if then, join the group.
                 lck.lock();
                 in_group[who] = true;
                 lck.unlock();
@@ -190,11 +208,13 @@ void after_login(int client_fd, int who){
             for(int i=0;i<4;i++) cur_group[i] = in_group[i];
             lck.unlock();
 
+            // can send message iff user is in group.
             if(!cur_group[who])
                 add_queue(who, query(CANNOT_SEND, nullptr, 0));
             else{
+                // found other user in group.
                 for(int i=0;i<4;i++) if(i!=who && cur_group[i]){
-                    msgsize += 4;
+                    msgsize += 4; // uid = ID('A'~'D') - 'A'
                     for(int j=msgsize-1;j>=4;j--)
                         buff[j] = buff[j-4];
                     *(int*)buff = who;
@@ -207,9 +227,10 @@ void after_login(int client_fd, int who){
             lck.lock();
             can_leave = in_group[who];
             lck.unlock();
-            if(!can_leave)
+            if(!can_leave) // iff user is in group.
                 add_queue(who, query(CANNOT_LEAVE, nullptr, 0));
             else{
+                // leaving group.
                 lck.lock();
                 in_group[who] = false;
                 invited[who] = false;
@@ -244,13 +265,14 @@ int main(){
         exit(1);
 
     client_addr_size = sizeof(struct sockaddr_in);
-    std::thread(sender).detach();
+    std::thread(sender).detach(); // start sender thread before opening the port.
 
     while(1){
         sock_fd_client = accept(sock_fd_server,
                 (struct sockaddr *) &client_addr,
                 (socklen_t *) &client_addr_size);
         if(sock_fd_client > 0){
+            // accepted! start user thread.
             std::thread(do_login, sock_fd_client).detach();
         }
     }
