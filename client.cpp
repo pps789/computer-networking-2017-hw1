@@ -125,11 +125,11 @@ void after_login(int fd){
                     connection_failed();
             }
             else if(token == "leave"){
-                if(send_message(fd, LEAVE, nullptr, 0))
+                if(!send_message(fd, LEAVE, nullptr, 0))
                     connection_failed();
             }
             else if(token == "logout"){
-                if(send_message(fd, LOGOUT, nullptr, 0))
+                if(!send_message(fd, LOGOUT, nullptr, 0))
                     connection_failed();
                 break;
             }
@@ -145,7 +145,7 @@ void after_login(int fd){
                         tg.push_back(buff[i]);
                     }
                     std::copy(tg.begin(), tg.end(), buff);
-                    if(send_message(fd, INVITE, buff, tg.size()))
+                    if(!send_message(fd, INVITE, buff, tg.size()))
                         connection_failed();
                 }
             }
