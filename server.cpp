@@ -18,6 +18,7 @@
 const int PORT = 20400;
 const int MSGSIZE = 256;
 std::mutex mtx;
+std::condition_variable cv;
 
 void do_login(int client_fd);
 void after_login(int client_fd, int who);
@@ -39,34 +40,36 @@ bool in_group[4] = {true, true, false, false};
 bool invited[4];
 
 void sender(){
-    timespec ts;
-    ts.tv_sec = 0;
-    ts.tv_nsec = 10000;
     query q;
     int fd;
     char buff[MSGSIZE];
     while(1){
+        bool to_send = false;
+        int target = -1;
         for(int i=0;i<4;i++){
-            nanosleep(&ts, nullptr);
-            bool to_send = false;
             std::unique_lock<std::mutex> lck(mtx);
             if(fds[i] > 0 && !client_queue[i].empty()){
                 fd = fds[i];
                 q = client_queue[i].front();
                 to_send = true;
+                target = i;
             }
             lck.unlock();
+            if(to_send) break;
+        }
 
-            if(to_send){
-                to_send = false;
-                std::copy(q.message.begin(), q.message.end(), buff);
-                bool success = send_message(fd, q.type, buff, q.message.size());
-                if(success){
-                    lck.lock();
-                    client_queue[i].pop();
-                    lck.unlock();
-                }
+        if(to_send){
+            std::copy(q.message.begin(), q.message.end(), buff);
+            if(send_message(fd, q.type, buff, q.message.size())){
+                std::unique_lock<std::mutex> lck(mtx);
+                client_queue[target].pop();
+                lck.unlock();
             }
+        }
+        else{
+            std::unique_lock<std::mutex> lck(mtx);
+            cv.wait(lck);
+            lck.unlock();
         }
     }
 }
@@ -80,40 +83,48 @@ void do_login(int client_fd){
             char id = buff[0];
             if('A' <= id && id <= 'D'){
                 int who = id - 'A';
-                int unread;
+                after_login(client_fd, who);
 
                 std::unique_lock<std::mutex> lck(mtx);
-                unread = client_queue[who].size();
+                fds[who] = -1;
                 lck.unlock();
-
-                send_int(client_fd, LOGIN_STATUS, unread);
-                after_login(client_fd, who);
+                break;
             }
             else{
-                printf("Login Failed.\n");
-                send_int(client_fd, LOGIN_STATUS, -1); // LOGIN fail
+                fprintf(stderr, "%d Login Failed.\n", client_fd);
+                if(!send_int(client_fd, LOGIN_STATUS, -1)) break;
             }
         }
         else{
-            printf("Login Failed.\n");
-            send_int(client_fd, LOGIN_STATUS, -1); // LOGIN fail
+            fprintf(stderr, "%d Login Failed.\n", client_fd);
+            if(!send_int(client_fd, LOGIN_STATUS, -1)) break;
         }
     }
 
-    printf("%d connection closed.\n", client_fd);
+    fprintf(stderr, "%d connection closed.\n", client_fd);
+    close(client_fd);
 }
 
 void add_queue(int target, const query& q){
     std::unique_lock<std::mutex> lck(mtx);
     client_queue[target].push(q);
+    cv.notify_one();
     lck.unlock();
 }
 
 void after_login(int client_fd, int who){
-    printf("User %d login. Client_fd: %d\n", who, client_fd);
+    fprintf(stderr, "User %d login. Client_fd: %d\n", who, client_fd);
+    int unread;
 
     std::unique_lock<std::mutex> lck(mtx);
+    unread = client_queue[who].size();
     fds[who] = client_fd;
+    lck.unlock();
+
+    if(!send_int(client_fd, LOGIN_STATUS, unread)) return;
+
+    lck.lock();
+    cv.notify_one();
     lck.unlock();
 
     char type;
@@ -125,9 +136,10 @@ void after_login(int client_fd, int who){
                 add_queue(who, query(INVALID_ID, nullptr, 0));
                 continue;
             }
-            
+
             int invite = buff[0] - 'A';
             bool me, you;
+
             lck.lock();
             me = in_group[who];
             you = in_group[invite];
@@ -142,8 +154,10 @@ void after_login(int client_fd, int who){
                 lck.lock();
                 invited[invite] = true;
                 lck.unlock();
+
                 *(int*)buff = who;
                 add_queue(invite, query(INVITE, buff, 4));
+                add_queue(who, query(INVITE_SUCCESS, nullptr, 0));
             }
         }
         else if(type == ACCEPT_INVITE){
@@ -151,12 +165,16 @@ void after_login(int client_fd, int who){
             lck.lock();
             can_join = invited[who];
             lck.unlock();
+
             if(can_join){
                 lck.lock();
                 in_group[who] = true;
                 lck.unlock();
+                add_queue(who, query(ACCEPT_INVITE, nullptr, 0));
             }
-            add_queue(who, query(ACCEPT_INVITE, nullptr, 0));
+            else{
+                add_queue(who, query(INVALID_ACCEPT, nullptr, 0));
+            }
         }
         else if(type == DECLINE_INVITE){
             lck.lock();
@@ -196,13 +214,8 @@ void after_login(int client_fd, int who){
                 add_queue(who, query(LEAVE, nullptr, 0));
             }
         }
-        else if(type == LOGOUT) break;
+        else if(type == LOGOUT) return;
     }
-    
-    lck.lock();
-    close(fds[who]);
-    fds[who] = -1;
-    lck.unlock();
 
     printf("User %d, fd %d connection closing.\n", who, client_fd);
 };
@@ -222,7 +235,7 @@ int main(){
     server_addr.sin_addr.s_addr = htonl(INADDR_ANY);
     server_addr.sin_port = htons(PORT);
     if(bind(sock_fd_server, (struct sockaddr*) &server_addr,
-            sizeof(struct sockaddr_in)) < 0)
+                sizeof(struct sockaddr_in)) < 0)
         exit(1);
     if(listen(sock_fd_server, 5) < 0)
         exit(1);
@@ -232,8 +245,8 @@ int main(){
 
     while(1){
         sock_fd_client = accept(sock_fd_server,
-            (struct sockaddr *) &client_addr,
-            (socklen_t *) &client_addr_size);
+                (struct sockaddr *) &client_addr,
+                (socklen_t *) &client_addr_size);
         if(sock_fd_client > 0){
             std::thread(do_login, sock_fd_client).detach();
         }

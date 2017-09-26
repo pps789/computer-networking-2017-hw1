@@ -60,6 +60,9 @@ void receiver(int fd){
             int who = *(int*)buff;
             printf("%c invites you. /accept or /decline.\n", 'A' + who);
         }
+        else if(type == INVITE_SUCCESS){
+            printf("Invitation succeeded.\n");
+        }
         else if(type == SEND){
             int who = *(int*)buff;
             printf("%c: ", 'A' + who);
@@ -68,6 +71,9 @@ void receiver(int fd){
         }
         else if(type == ACCEPT_INVITE){
             printf("You accepted invitation. Now you can read messages.\n");
+        }
+        else if(type == INVALID_ACCEPT){
+            printf("You have no invitation to accept.\n");
         }
         else if(type == DECLINE_INVITE){
             printf("You declined invitation.\n");
