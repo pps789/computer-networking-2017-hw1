@@ -86,7 +86,8 @@ void do_login(int client_fd){
                 after_login(client_fd, who);
 
                 std::unique_lock<std::mutex> lck(mtx);
-                fds[who] = -1;
+                if(fds[who] == client_fd)
+                    fds[who] = -1;
                 lck.unlock();
                 break;
             }
@@ -188,6 +189,7 @@ void after_login(int client_fd, int who){
             lck.lock();
             for(int i=0;i<4;i++) cur_group[i] = in_group[i];
             lck.unlock();
+
             if(!cur_group[who])
                 add_queue(who, query(CANNOT_SEND, nullptr, 0));
             else{
@@ -218,7 +220,7 @@ void after_login(int client_fd, int who){
         else if(type == LOGOUT) return;
     }
 
-    printf("User %d, fd %d connection closing.\n", who, client_fd);
+    fprintf(stderr, "User %d, fd %d connection closing.\n", who, client_fd);
 };
 
 int main(){
