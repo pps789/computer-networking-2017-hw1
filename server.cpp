@@ -118,6 +118,7 @@ void after_login(int client_fd, int who){
 
     std::unique_lock<std::mutex> lck(mtx);
     unread = client_queue[who].size();
+    if(fds[who] != -1) close(fds[who]);
     fds[who] = client_fd;
     lck.unlock();
 
