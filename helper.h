@@ -20,10 +20,10 @@ enum message_type{
     DECLINE_INVITE,
     NOT_IN_GROUP,
     ALREADY_IN_GROUP,
+    INVALID_ID,
 
     // send message
     SEND,
-    INVALID_ID,
     CANNOT_SEND,
 
     // leave group
